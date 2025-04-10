@@ -44,8 +44,9 @@ class Handler {
     static beforeHandler(controller) {
         return (req, res, next) => {
             req.httpRequestContext = Http_request_1.HttpRequest.getContext(req);
+            req.executionContext = {};
             controller
-                .beforeHandle(req.httpRequestContext)
+                .beforeHandle(req.httpRequestContext, req.executionContext)
                 .then(() => {
                 next();
             })
@@ -110,6 +111,16 @@ class Handler {
                 const { httpRequestContext } = req;
                 return httpRequestContext[actionParamFound.options.attr];
             }
+            else if ((0, builtin_1.hasOwnProperty)(actionParamFound.options, "type") && actionParamFound.options.type === "CONTEXT") {
+                const { attr, validate } = actionParamFound.options;
+                const contextAttr = req.executionContext[attr];
+                if (validate) {
+                    if (validate(contextAttr) === false) {
+                        throw Http_response_1.HttpResponder.badRequest.message(`BadRequest (Invalid ${actionParamFound.options.type.toString()}: ${attr})`)();
+                    }
+                }
+                return contextAttr;
+            }
             else {
                 actionParam = actionParamFound;
             }
@@ -129,31 +140,31 @@ class Handler {
                         const em = actionParam.options.enum;
                         const check = (iterVal) => {
                             const emKey = Object.keys(em).find(e => {
-                                if (actionParam.type === router_1.ParamType.Query)
+                                if ((actionParam === null || actionParam === void 0 ? void 0 : actionParam.type) === router_1.ParamType.Query)
                                     return String(em[e]) === String(iterVal);
                                 return em[e] === iterVal;
                             });
                             if (!emKey) {
-                                let invalid = actionParam.options.invalid;
+                                let invalid = actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.invalid;
                                 if (typeof invalid === "function") {
                                     invalid = invalid(iterVal);
                                 }
                                 throw invalid instanceof Http_error_1.HttpError
                                     ? invalid
-                                    : Http_response_1.HttpResponder.badRequest.message(invalid || `BadRequest (Invalid ${actionParam.type.toString()}: ${actionParam.name})`)();
+                                    : Http_response_1.HttpResponder.badRequest.message(invalid || `BadRequest (Invalid ${actionParam === null || actionParam === void 0 ? void 0 : actionParam.type.toString()}: ${actionParam === null || actionParam === void 0 ? void 0 : actionParam.name})`)();
                             }
                         };
                         if (typeof value === "string") {
-                            if (actionParam.options.delimiter) {
+                            if (actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.delimiter) {
                                 value = value.split(actionParam.options.delimiter);
                             }
                         }
-                        if (actionParam.options.array === true) {
+                        if ((actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.array) === true) {
                             value = Array.isArray(value) ? value : [value];
                             for (const iterVal of value) {
                                 check(iterVal);
                             }
-                            if (actionParam.options.required && !value.length) {
+                            if ((actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.required) && !value.length) {
                                 value = null;
                             }
                         }
@@ -163,21 +174,21 @@ class Handler {
                     }
                     else if (Array.prototype === e.prototype) {
                         if (typeof value === "string") {
-                            if (actionParam.options.delimiter) {
+                            if (actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.delimiter) {
                                 value = value.split(actionParam.options.delimiter);
                             }
                             else {
                                 value = [value];
                             }
                         }
-                        if (actionParam.options.type) {
-                            value = value.map((v) => this.paramTransformer(v, actionParam.options.type));
+                        if (actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.type) {
+                            value = value.map((v) => this.paramTransformer(v, actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.type));
                         }
                     }
                     else {
                         value = this.paramTransformer(value, e);
                     }
-                    if (actionParam.options.validate) {
+                    if (actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.validate) {
                         if (actionParam.options.validate(value) === false) {
                             throw new Error("Validation Failed.");
                         }
@@ -188,7 +199,7 @@ class Handler {
                 if (err instanceof Http_error_1.HttpError) {
                     throw err;
                 }
-                else if (typeof actionParam.options.invalid === "function") {
+                else if (typeof (actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.invalid) === "function") {
                     let invalid = actionParam.options.invalid;
                     if (typeof invalid === "function") {
                         invalid = invalid(value);
@@ -201,10 +212,11 @@ class Handler {
                     throw Http_response_1.HttpResponder.badRequest.message(actionParam.options.invalid || `BadRequest (Invalid ${actionParam.type.toString()}: ${actionParam.name})`)();
                 }
             }
-            if ((0, builtin_1.hasOwnProperty)(actionParam.options, "default") && value === undefined) {
+            if ((actionParam === null || actionParam === void 0 ? void 0 : actionParam.options) && "default" in actionParam.options && value === undefined) {
                 value = actionParam.options.default;
             }
-            if (actionParam.options.required && (value === null || typeof value === "undefined" || (typeof value === "string" && value === ""))) {
+            if ((actionParam === null || actionParam === void 0 ? void 0 : actionParam.options.required) &&
+                (value === null || typeof value === "undefined" || (typeof value === "string" && value === ""))) {
                 if (typeof actionParam.options.missing === "function") {
                     throw actionParam.options.missing();
                 }
@@ -263,7 +275,7 @@ class Handler {
     static afterHandler(controller) {
         return (req, res, next) => {
             controller
-                .afterHandle(req.httpRequestContext, res.preparedResponse)
+                .afterHandle(req.httpRequestContext, res.preparedResponse, req.executionContext)
                 .then(resp => {
                 if (resp instanceof Http_error_1.HttpError) {
                     next(resp);
@@ -305,7 +317,7 @@ class Handler {
         };
     }
     static errorHandler(controller, cyan) {
-        return (err, req, res, next) => {
+        return ((err, req, res, next) => {
             if (err instanceof Http_response_1.HttpResponse || err instanceof Http_error_1.HttpError) {
                 next(err);
                 return;
@@ -319,10 +331,10 @@ class Handler {
                 .catch((err) => {
                 next(err);
             });
-        };
+        });
     }
     static httpErrorHandler(controller) {
-        return (err, req, res, next) => {
+        return ((err, req, res, next) => {
             if (res.finalized) {
                 next(err);
                 return;
@@ -335,7 +347,7 @@ class Handler {
                 .catch((err) => {
                 next(err);
             });
-        };
+        });
     }
     static accessLogger(name) {
         return (0, morgan_1.default)((tokens, req, res) => [

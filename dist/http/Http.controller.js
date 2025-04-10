@@ -16,16 +16,16 @@ class Controller {
         };
     }
     render(cyan) {
-        return (request, response, next) => {
+        return ((request, response, next) => {
             response
                 .status(response.processedResponse.status)
                 .set(response.processedResponse.headers)
                 .send(response.processedResponse.content)
                 .end();
-        };
+        });
     }
-    async beforeHandle(request) { }
-    async afterHandle(request, response) {
+    async beforeHandle(request, executionContext) { }
+    async afterHandle(request, response, executionContext) {
         return response;
     }
     async onHttpError(request, error) {
